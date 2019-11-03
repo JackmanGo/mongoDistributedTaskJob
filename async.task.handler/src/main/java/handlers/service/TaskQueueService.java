@@ -1,13 +1,17 @@
 package handlers.service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
+import handlers.enums.TaskStatusEnums;
 import handlers.models.TaskQueue;
 import handlers.repository.Repository;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 对数据库中对Task操作
+ */
 public class TaskQueueService {
 
 	//private TaskQueueDao taskQueueDao = new TaskQueueDaoImpl();
@@ -37,12 +41,9 @@ public class TaskQueueService {
 	 * @return List<TaskQueue>
 	 */
 	public List<TaskQueue> peaks(int threadNid) {
-		/**
-		 * //获取task的状态为0 int status = 0; //获取task的tag为null String tag = null;
-		 * //taskQueueDao.peaks中进行findAndModify。但每次只能获取一个,效率太低 TaskQueue taskQueues =
-		 * taskQueueDao.peaks(nowExecingIds,status,tag);
-		 **/
-     
+
+
+		//获取条件：task的状态为0和1（未处理和已加载内存）and threadNid 为0和当前线程threadNid
 		// 获取task状态为0，1(初始化，处理中)。避免将加载到内存中task因重启而丢失
 		List<Integer> statuses = new ArrayList<Integer>();
 		statuses.add(0);
@@ -59,17 +60,18 @@ public class TaskQueueService {
 		List<TaskQueue> taskQueues = repository.peaks(statuses, tags, priority);
 		List<String> ids = taskQueues.stream().map(it -> it.get_id()).collect(Collectors.toList());
 
-		// 将上述获取到所有未处理的或当前线程正在处理的所有线程全部更新为当前线程正常处理
-		// 此处的更新的条件除了$in:ids外，还必须threadTag为当下线程的nid。因为此处可能有多个线程获取到未处理的task
-		// 但只能有一个线程更新成功“处理中”
-		int updateSize = repository.execing(ids, threadNid);
 
-		// 如果更新出的数量为0，说明所有的task全部是处理中的，返回空
-		if (updateSize == 0) {
+		// 如果查询数量为0，说明所有的task全部是处理中的，返回空
+		if (ids.size() == 0) {
 			return new ArrayList<TaskQueue>();
 		}
 
-		// 获取出所有处理中的task
+		// 将上述获取到所有未处理的或当前线程正在处理的所有线程全部更新为当前线程正常处理
+		// 此处的更新的条件除了in:ids外，还必须threadNid为当下线程的nid或0。因为此处可能有多个线程获取到未处理的task
+		// 但只能有一个线程更新成功“处理中”
+		repository.execing(ids, threadNid);
+
+		// 再次获取出所有处理中的task
 		List<Integer> execStatuses = new ArrayList<Integer>();
 		execStatuses.add(1);
 		List<Integer> execTags = new ArrayList<Integer>();
@@ -79,20 +81,11 @@ public class TaskQueueService {
 	}
 
 	/**
-	 * public int back(long expired) {
-	 * 
-	 * Date ltDate = new Date(new Date().getTime() - expired); return
-	 * taskQueueDao.back(ltDate); }
-	 **/
-	public void execSuccess(String _id) {
-		repository.success(_id);
+	 * _id任务执行结果
+	 * @param _id
+	 */
+	public void updateTaskStatus(String _id, TaskStatusEnums statusEnums) {
+		repository.updateTaskStatus(_id, statusEnums);
 	}
 
-	public void execFail(String _id) {
-		repository.fail(_id);
-	}
-
-	public void execBlock(String _id) {
-		repository.block(_id);
-	}
 }

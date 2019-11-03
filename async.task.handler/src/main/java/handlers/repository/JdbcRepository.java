@@ -14,6 +14,8 @@ import java.util.List;
 
 public class JdbcRepository implements Repository {
 
+    private ThreadLocal<Connection> connectLocal = new ThreadLocal();
+
     private DataSource dataSource;
 
     public void setDataSource(DataSource dataSource) {
@@ -33,8 +35,7 @@ public class JdbcRepository implements Repository {
         try {
 
             connection = dataSource.getConnection();
-            String sqlStr = "insert into task_queue(_id, name, params, priority) values (?,?,?,?)";
-            stmt = connection.prepareStatement(sqlStr);
+            String sqlStr = "insert into task_queue(_id, name, params, priority) value (?,?,?,?)";
             stmt = connection.prepareStatement(sqlStr);
 
             stmt.setString(1, taskQueue.get_id());
@@ -46,6 +47,12 @@ public class JdbcRepository implements Repository {
         }catch (SQLException e){
 
             throw new RuntimeException(e.getMessage());
+        }finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
     }
@@ -53,13 +60,14 @@ public class JdbcRepository implements Repository {
     @Override
     public int updateThreadPid(int nid, long threadId) {
 
-        Connection connection = null;
-        PreparedStatement stmt = null;
+        Connection connection;
+
+        PreparedStatement stmt;
 
         try {
 
             connection = dataSource.getConnection();
-            String sqlStr = "update set pid = ? from thread_instance where nid = ?";
+            String sqlStr = "update thread_instance set pid = ? where nid = ?";
             stmt = connection.prepareStatement(sqlStr);
 
             stmt.setLong(1, threadId);
@@ -74,15 +82,14 @@ public class JdbcRepository implements Repository {
 
     }
 
-    //TODO 事务
+
     @Override
-    public Boolean updateThreadTasksByNid(int nid, int nowTaskSize, int finishedTasks) {
+    public Boolean updateThreadTasksByNid(int nid, int nowTaskSize, int finishedTasks) throws SQLException {
 
         Connection connection = null;
         PreparedStatement stmt = null;
 
         try {
-
             connection = dataSource.getConnection();
             String selectSqlStr = "select * from thread_instance where nid = ?";
 
@@ -94,7 +101,7 @@ public class JdbcRepository implements Repository {
                 return Boolean.FALSE;
             }
 
-            String updateSqlStr = "update thread_instance set now_counts = ? and finished_counts = ? where nid = ?";
+            String updateSqlStr = "update thread_instance set now_counts = ? and finished_counts = ? and `update` = now() where nid = ?";
             stmt = connection.prepareStatement(updateSqlStr);
 
             stmt.setInt(1, nowTaskSize);
@@ -103,8 +110,11 @@ public class JdbcRepository implements Repository {
 
             stmt.executeUpdate();
 
-        } catch (SQLException e) {
+        } catch (Throwable e) {
+
             throw new RuntimeException(e.getMessage());
+        }finally {
+            connection.close();
         }
 
         return Boolean.TRUE;
@@ -133,6 +143,12 @@ public class JdbcRepository implements Repository {
         } catch (SQLException e) {
 
             throw new RuntimeException(e.getMessage());
+        }finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
     }
@@ -159,6 +175,12 @@ public class JdbcRepository implements Repository {
         } catch (SQLException e) {
 
             throw new RuntimeException(e.getMessage());
+        }finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -195,7 +217,7 @@ public class JdbcRepository implements Repository {
                 }
             }
 
-            selectSqlStr.append(") and priority = ?");
+            selectSqlStr.append(") and priority = ? limit 30");
 
             stmt = connection.prepareStatement(selectSqlStr.toString());
 
@@ -234,12 +256,22 @@ public class JdbcRepository implements Repository {
         } catch (SQLException e) {
 
             throw new RuntimeException(e.getMessage());
+        }finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     @Override
     public int execing(List<String> _ids, int threadNid) {
 
+
+        if(_ids.size() == 0){
+            return 0;
+        }
         Connection connection = null;
         PreparedStatement stmt = null;
 
@@ -247,7 +279,7 @@ public class JdbcRepository implements Repository {
 
             connection = dataSource.getConnection();
             StringBuilder selectSqlStr = new StringBuilder();
-            selectSqlStr.append("update task_queue set threadNid = ? where _id in (");
+            selectSqlStr.append("update task_queue set threadNid = ?, status = 1 where threadNid in (0, ?) and _id in (");
 
             for (int i = 0; i < _ids.size(); i++) {
 
@@ -265,6 +297,7 @@ public class JdbcRepository implements Repository {
 
             int index = 1;
             stmt.setInt(index++, threadNid);
+            stmt.setInt(index++, threadNid);
 
             for (int i = 0; i < _ids.size(); i++) {
                 stmt.setString(index++, _ids.get(i));
@@ -274,12 +307,18 @@ public class JdbcRepository implements Repository {
 
         } catch (SQLException e) {
             throw new RuntimeException(e.getMessage());
+        }finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
     }
 
     @Override
-    public void success(String _id) {
+    public void updateTaskStatus(String _id, TaskStatusEnums taskStatusEnums) {
 
         Connection connection = null;
         PreparedStatement stmt = null;
@@ -288,7 +327,7 @@ public class JdbcRepository implements Repository {
 
             connection = dataSource.getConnection();
             StringBuilder selectSqlStr = new StringBuilder();
-            selectSqlStr.append("update task_queue set threadNid = "+ TaskStatusEnums.SUCCESS.getStatus() +" where status = ?");
+            selectSqlStr.append("update task_queue set status = "+ taskStatusEnums.getStatus() +" where _id = ?");
 
             stmt = connection.prepareStatement(selectSqlStr.toString());
 
@@ -298,36 +337,14 @@ public class JdbcRepository implements Repository {
 
         } catch (SQLException e) {
             throw new RuntimeException(e.getMessage());
+        }finally {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
 
     }
 
-    @Override
-    public void fail(String _id) {
-
-        Connection connection = null;
-        PreparedStatement stmt = null;
-
-        try {
-
-            connection = dataSource.getConnection();
-            StringBuilder selectSqlStr = new StringBuilder();
-            selectSqlStr.append("update task_queue set threadNid = "+ TaskStatusEnums.FAILED.getStatus() +" where status = ?");
-
-
-            stmt = connection.prepareStatement(selectSqlStr.toString());
-
-            stmt.setString(1, _id);
-
-            stmt.executeUpdate();
-
-        } catch (SQLException e) {
-            throw new RuntimeException(e.getMessage());
-        }
-    }
-
-    @Override
-    public void block(String _id) {
-
-    }
 }

@@ -1,10 +1,15 @@
 package handlers.repository;
 
 import handlers.api.vo.TaskQueueVO;
+import handlers.enums.TaskStatusEnums;
 import handlers.models.TaskQueue;
 
+import java.sql.SQLException;
 import java.util.List;
 
+/**
+ * 加载Task的基类
+ */
 public interface Repository {
 
     void insertTask(TaskQueueVO taskQueue);
@@ -24,7 +29,7 @@ public interface Repository {
      * @param finishedTasks
      * @return
      */
-    Boolean updateThreadTasksByNid(int nid, int nowTaskSize, int finishedTasks);
+    Boolean updateThreadTasksByNid(int nid, int nowTaskSize, int finishedTasks) throws SQLException;
 
     /**
      * 获取所有的线程id
@@ -57,17 +62,8 @@ public interface Repository {
     int execing(List<String> _ids, int threadNid);
 
     /**
-     * 异步任务执行成功
+     * 异步任务执行结果更新
      * @param _id
      */
-    void success(String _id);
-
-    /**
-     * 异步任务执行失败
-     * @param _id
-     */
-    void fail(String _id);
-
-
-    void block(String _id);
+    void updateTaskStatus(String _id, TaskStatusEnums taskStatusEnums);
 }

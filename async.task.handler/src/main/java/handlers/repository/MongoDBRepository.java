@@ -1,9 +1,10 @@
 package handlers.repository;
 
+import com.mongodb.WriteResult;
 import handlers.api.vo.TaskQueueVO;
+import handlers.enums.TaskStatusEnums;
 import handlers.models.TaskQueue;
 import handlers.models.ThreadInstance;
-import com.mongodb.WriteResult;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -18,7 +19,7 @@ import java.util.stream.Collectors;
 public class MongoDBRepository implements Repository {
 
     @Autowired
-    MongoTemplate template;
+    private MongoTemplate template;
 
     @Override
     public void insertTask(TaskQueueVO taskQueueVO){
@@ -71,19 +72,8 @@ public class MongoDBRepository implements Repository {
     }
 
     @Override
-    public void success(String _id) {
+    public void updateTaskStatus(String _id, TaskStatusEnums taskStatusEnums) {
 
-        template.updateFirst(Query.query(Criteria.where("_id").is(_id)), Update.update("status", 9), TaskQueue.class);
-    }
-
-    @Override
-    public void fail(String _id) {
-
-        template.updateFirst(Query.query(Criteria.where("_id").is(_id)), Update.update("status", 8), TaskQueue.class);
-    }
-
-    @Override
-    public void block(String _id) {
-
+        template.updateFirst(Query.query(Criteria.where("_id").is(_id)), Update.update("status", taskStatusEnums.getStatus()), TaskQueue.class);
     }
 }

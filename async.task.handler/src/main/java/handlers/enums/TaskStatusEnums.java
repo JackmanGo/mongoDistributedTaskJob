@@ -4,6 +4,7 @@ public enum TaskStatusEnums {
 
     DEFAULT(0, "未执行"),
     LOADING(1, "被加载"),
+    TIMEOUT(7, "超时"),
     FAILED(8, "失败"),
     SUCCESS(9, "成功");
 

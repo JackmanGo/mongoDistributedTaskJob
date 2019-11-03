@@ -9,4 +9,6 @@
 
     <bean id="taskQueueService" class="handlers.service.TaskQueueService"/>
 
+    <bean id="factoryBeanPojo" class="handlers.task.JobThreadFactory"/>
+
 </beans>

@@ -1,138 +1,114 @@
 package main;
 
 
-import com.mchange.v2.c3p0.ComboPooledDataSource;
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientOptions;
+import com.alibaba.druid.pool.DruidDataSource;
 import handlers.api.TaskHandler;
 import handlers.api.vo.TaskQueueVO;
 import handlers.repository.JdbcRepository;
-import handlers.repository.MongoDBRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ImportResource;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.SimpleMongoDbFactory;
-
-import java.beans.PropertyVetoException;
 import java.util.UUID;
 
 @SpringBootApplication
 @ImportResource(value = {"classpath:task.xml"})
 public class App {
 
-    private static MongoTemplate mongoTemplate;
-
     public static void main(String[] args) {
 
         ApplicationContext ctx = SpringApplication.run(App.class, args);
-        String[] taskHandler = ctx.getBean(String[].class);
 
-        System.out.println("==============");
-        System.out.println(taskHandler);
-
+        /**
+         * 加载任务执行器
+         */
         TaskHandler task = ctx.getBean(TaskHandler.class);
-        testData(task);
+        //生成测试Task
+        //testData(task);
 
         task.startThreadPool(5);
     }
 
 
-    @Bean
-    public MongoDBRepository getMongoTemplate() {
-
-        MongoDBRepository mongo = new MongoDBRepository();
-        MongoClientOptions.Builder builder = MongoClientOptions.builder();
-        // 设定连接属性
-        builder.connectionsPerHost(8);
-        builder.threadsAllowedToBlockForConnectionMultiplier(4);
-        builder.socketTimeout(1000 * 5);
-        builder.maxWaitTime(1000 * 3);
-        builder.socketKeepAlive(true);
-        builder.socketTimeout(1500);
-        MongoClient client;
-
-        if (mongoTemplate != null) {
-
-            return mongo;
-        }
-
-        try {
-
-            client = new MongoClient("127.0.0.1", builder.build());
-            mongoTemplate = new MongoTemplate(new SimpleMongoDbFactory(client, "async_task_handler"));
-            return mongo;
-        } catch (Exception e) {
-            throw new RuntimeException(e.getMessage());
-        }
-    }
-
-
     /**
-     * @Bean public JdbcRepository getDataSource() {
+     * @Bean public MongoDBRepository getMongoTemplate() {
      * <p>
-     * JdbcRepository repository = new JdbcRepository();
+     * MongoDBRepository mongo = new MongoDBRepository();
+     * MongoClientOptions.Builder builder = MongoClientOptions.builder();
+     * // 设定连接属性
+     * builder.connectionsPerHost(8);
+     * builder.threadsAllowedToBlockForConnectionMultiplier(4);
+     * builder.socketTimeout(1000 * 5);
+     * builder.maxWaitTime(1000 * 3);
+     * builder.socketKeepAlive(true);
+     * builder.socketTimeout(1500);
+     * MongoClient client;
      * <p>
-     * ComboPooledDataSource comboPooledDataSource = new ComboPooledDataSource();
+     * if (mongoTemplate != null) {
+     * <p>
+     * return mongo;
+     * }
      * <p>
      * try {
      * <p>
-     * comboPooledDataSource.setDriverClass("com.mysql.jdbc.Driver");
-     * comboPooledDataSource.setJdbcUrl("jdbc:mysql://127.0.0.1:3306/async_task_handler");
-     * comboPooledDataSource.setUser("root");
-     * comboPooledDataSource.setPassword("toor");
-     * comboPooledDataSource.setInitialPoolSize(10);
-     * comboPooledDataSource.setMinPoolSize(10);
-     * comboPooledDataSource.setMaxPoolSize(30);
-     * comboPooledDataSource.setAcquireIncrement(3);
-     * comboPooledDataSource.setMaxIdleTime(1800);
-     * comboPooledDataSource.setCheckoutTimeout(300000);
-     * } catch (PropertyVetoException e) {
-     * e.printStackTrace();
+     * client = new MongoClient("127.0.0.1", builder.build());
+     * mongoTemplate = new MongoTemplate(new SimpleMongoDbFactory(client, "async_task_handler"));
+     * return mongo;
+     * } catch (Exception e) {
+     * throw new RuntimeException(e.getMessage());
      * }
-     * <p>
-     * repository.setDataSource(comboPooledDataSource);
-     * <p>
-     * return repository;
      * }
      **/
 
+
     @Bean
+    public JdbcRepository getDataSource() {
+        JdbcRepository repository = new JdbcRepository();
+        DruidDataSource druidDataSource = new DruidDataSource();
+        druidDataSource.setUrl("jdbc:mysql://127.0.0.1:3306/async_task_handler");
+        druidDataSource.setUsername("root");
+        druidDataSource.setPassword("toor");
+        druidDataSource.setMaxActive(100);
+        repository.setDataSource(druidDataSource);
+        return repository;
+    }
+
+
+    @Bean("jobClassName")
     public String[] jobImpl() {
         return new String[]{"job.jobImpl.JobOne", "job.jobImpl.JobTwo"};
     }
 
     /**
-     * 向数据库中添加要处理的任务
-     * 对于JobOne和JobTwo各添加10个
+     * 向数据库中添加要处理的模拟任务
+     * 对于JobOne和JobTwo各添加100个
      */
     public static void testData(TaskHandler taskHandler) {
 
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 50; i++) {
 
             TaskQueueVO vo = new TaskQueueVO();
             vo.set_id(UUID.randomUUID().toString());
             vo.setName("JobOne");
             vo.setParams(i + "");
+            vo.setPriority(1);
 
             taskHandler.insertAsyncTask(vo);
         }
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 50; i++) {
 
             TaskQueueVO vo = new TaskQueueVO();
             vo.set_id(UUID.randomUUID().toString());
             vo.setName("JobTwo");
             vo.setParams(i + "");
+            vo.setPriority(1);
+
             taskHandler.insertAsyncTask(vo);
         }
 
 
-    }
-
-    //产生数据供task处理
-    //@Override
-    public void onApplicationEvent() {
     }
 }
